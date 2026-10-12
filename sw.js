@@ -1,4 +1,4 @@
-const C = "kartdash-v3";
+const C = "kartdash-v4";
 self.addEventListener("install", e => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 self.addEventListener("fetch", e => {

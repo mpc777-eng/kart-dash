@@ -132,20 +132,29 @@ function update(dt){
  // AI
  for(const a of AI){const as=seg(a.dist);let tgt=BASEMAX*a.skill;const gap=a.dist-P.dist;
   if(!a.done&&!P.done){if(gap>SEG*12)tgt*=0.82;else if(gap>SEG*4)tgt*=0.93;if(gap<-SEG*25)tgt*=1.12;}else tgt*=0.5;
-  if(a.spin>0){a.spin-=dt;a.speed*=Math.pow(0.4,dt);}else a.speed+=clamp(tgt-a.speed,-BASEMAX*0.8*dt,BASEMAX*0.4*dt);
-  if(Math.random()<dt*0.3)a.tx=[-0.6,-0.2,0.2,0.6][Math.random()*4|0];
+  if(a.boost>0)tgt*=1.35;if(a.spin>0){a.spin-=dt;a.speed*=Math.pow(0.4,dt);}else a.speed+=clamp(tgt-a.speed,-BASEMAX*0.8*dt,BASEMAX*0.4*dt);
+  a.itemCd=(a.itemCd||0)-dt;a.seek=null;
+  if(!a.item&&a.itemCd<=0&&!a.done){for(let n=1;n<18&&!a.seek;n++){for(const it of seg(a.dist+n*SEG).items)if(it.t==='box'&&!(it.cd>0)){if(!a.seek||Math.abs(it.off-a.x)<Math.abs(a.seek.off-a.x))a.seek=it;}}}
+  if(a.seek)a.tx=a.seek.off;else if(Math.random()<dt*0.3)a.tx=[-0.6,-0.2,0.2,0.6][Math.random()*4|0];
   if(Math.abs(gap)<SEG*2&&Math.abs(a.x-P.x)<0.35)a.tx=a.x>P.x?Math.min(0.8,P.x+0.5):Math.max(-0.8,P.x-0.5);
   a.x=lerp(a.x,a.tx,dt*1.5);
   a.dist+=a.speed*dt;
-  for(const it of as.items)if(it.t==='nana'&&!it.gone&&Math.abs(a.x-it.off)<0.25){it.gone=1;a.spin=1;}
-  for(const it of as.items)if(it.t==='box'&&it.cd<=0&&!a.item&&Math.abs(a.x-it.off)<0.3){a.item=Math.random()<0.6?'zoom':'nana';a.useT=rnd(2,6);}
-  if(a.item){a.useT-=dt;if(a.useT<=0){if(a.item==='zoom'){a.speed*=1.25;}else if(gap>SEG*6||gap<-SEG*3){seg(a.dist-SEG*2).items.push({t:'nana',off:a.x});}a.item=null;}}
+  for(const it of as.items)if(it.t==='nana'&&!it.gone&&Math.abs(a.x-it.off)<0.25){it.gone=1;if(a.bubble>0)a.bubble=0;else a.spin=1;}
+  for(const it of as.items)if(it.t==='box'&&!(it.cd>0)&&!a.item&&a.itemCd<=0&&Math.abs(a.x-it.off)<0.32){it.cd=4;a.item=['zoom','zoom','nana','bubble','rocket'][Math.random()*5|0];a.useT=rnd(2,5);}
+  if(a.item){a.useT-=dt;if(a.useT<=0){const it=a.item;let used=true;
+   if(it==='zoom')a.boost=1.3;
+   else if(it==='nana'){if(gap>SEG*6||gap<-SEG*3)seg(a.dist-SEG*2).items.push({t:'nana',off:a.x});else{used=false;a.useT=1;}}
+   else if(it==='bubble')a.bubble=8;
+   else if(it==='rocket'){const ah=[P,...AI].filter(k=>k!==a&&!k.done&&k.dist>a.dist&&k.dist-a.dist<SEG*30).sort((x,y)=>x.dist-y.dist)[0];if(ah)rockets.push({d:a.dist,x:a.x,tgt:ah,src:a});else{used=false;a.useT=1.5;}}
+   if(used){a.item=null;a.itemCd=rnd(10,16);a.showIcon=it;a.showT=1.2;}}}
+  if(a.showT>0)a.showT-=dt;if(a.boost>0)a.boost-=dt;
   if(a.bubble>0)a.bubble-=dt;
   // bump with player
   if(Math.abs(a.dist-P.dist)<SEG*0.8&&Math.abs(a.x-P.x)<0.3){const d=P.x>a.x?1:-1;P.x+=d*0.12;a.x-=d*0.12;a.tx=a.x;if(!(bumpT>0)){bumpT=0.4;sfx.bump();}}
   for(const b of AI)if(b!==a&&Math.abs(a.dist-b.dist)<SEG*0.8&&Math.abs(a.x-b.x)<0.3){const d=a.x>b.x?1:-1;a.x+=d*dt*1.5;b.x-=d*dt*1.5;}
   if(!a.done&&a.dist>=LAPS*L){a.done=true;fin.push(a);if(state==='spectate'){t0=0;}}}
- for(const r of rockets){r.d+=BASEMAX*1.8*dt;r.x=lerp(r.x,r.tgt.x,dt*4);if(r.d>=r.tgt.dist){r.done=1;r.tgt.spin=0.9;sfx.spin();flash("Bonk! "+r.tgt.name+" spins!");}}
+ for(const r of rockets){r.d+=BASEMAX*1.8*dt;r.x=lerp(r.x,r.tgt.x,dt*4);if(r.d>=r.tgt.dist){r.done=1;const k=r.tgt;if(k===P){if(P.shield>0){P.shield=0;flash("Bubble saved you!");}else if(MODELS[P.model].n==="Bumper")flash("Bumper is too grippy!");else{P.spin=0.7;sfx.spin();flash("Bonk! Wheee!");}}
+  else if(k.bubble>0){k.bubble=0;}else{k.spin=0.9;if(!r.src){sfx.spin();flash("Bonk! "+k.name+" spins!");}}}}
  rockets=rockets.filter(r=>!r.done);
  if(state==='finish'){t0+=dt;if(t0>3){if(AI.every(a=>a.done))endRace();else{state='spectate';spI=AI.findIndex(a=>!a.done);say("Let's watch the others finish!");}}}
  if(state==='spectate'&&AI.every(a=>a.done)){t0+=dt;if(t0>5.5)endRace();}
@@ -278,7 +287,8 @@ function build3D(){if(world){scene.remove(world);disposeObj(world);}world=new TH
    const ar=new THREE.Mesh(G.cone(0.9,1.6,3),new THREE.MeshBasicMaterial({color:0xff5a00}));const p=posOf(s.i*SEG+SEG*0.5,s.pad,0.06);ar.position.set(p.x,p.y,p.z);ar.rotation.set(-Math.PI/2,0,0);ar.rotation.order='YXZ';ar.rotation.y=-p.h;ar.scale.set(1,1,0.1);world.add(ar);}});
  nanaMeshes.forEach(m=>scene.remove(m));nanaMeshes.clear();rocketMeshes.forEach(m=>scene.remove(m));rocketMeshes.clear();}
 // ---- karts ----
-const texCache={};
+const texCache={};const iconTC={};
+function iconTex(it){return iconTC[it]||(iconTC[it]=canvasTex(64,64,(c,w)=>{c.fillStyle="rgba(255,210,0,0.9)";c.beginPath();c.arc(32,32,30,0,7);c.fill();c.strokeStyle="#fff";c.lineWidth=4;c.stroke();c.font="38px sans-serif";c.textAlign="center";c.textBaseline="middle";c.fillText(ICON[it],32,35);}));}
 function kartMat(color){if(color==='gold')return new THREE.MeshPhongMaterial({color:0xffc400,specular:0xffffcc,shininess:90,emissive:0x332200});
  if(color==='rainbow'){texCache.rb=texCache.rb||canvasTex(64,8,(c,w,h)=>{["#f33","#f93","#fd0","#3c3","#36f","#a3f"].forEach((cc,i)=>{c.fillStyle=cc;c.fillRect(i*w/6,0,w/6+1,h);});});return new THREE.MeshLambertMaterial({map:texCache.rb});}
  return new THREE.MeshLambertMaterial({color});}
@@ -308,8 +318,9 @@ let lastT3=performance.now();
 function update3D(V,FP){const now=performance.now(),dt=Math.min(0.05,(now-lastT3)/1000),tt=now/1000;lastT3=now;
  for(const [k,m] of kartMeshes){const p=posOf(k.dist,k.x);m.position.set(p.x,p.y,p.z);
   const steer=k===P?P.steer:clamp((k.tx-k.x)*2,-1,1);m.rotation.set(p.pitch,-p.h-steer*0.18+(k.spin>0?k.spin*14:0),-Math.atan(p.bk));
-  m.visible=!(FP&&k===P);m.flame.visible=(k===P&&P.boost>0);if(m.flame.visible)m.flame.scale.set(1,1+Math.random()*0.6,1);
-  m.bub.visible=k===P&&P.shield>0&&!FP;if(m.label)m.label.visible=k!==V&&Math.abs(k.dist-V.dist)>900&&Math.abs(k.dist-V.dist)<12000;
+  m.visible=!(FP&&k===P);m.flame.visible=k.boost>0;if(m.flame.visible)m.flame.scale.set(1,1+Math.random()*0.6,1);
+  m.bub.visible=k===P?(P.shield>0&&!FP):k.bubble>0;
+  if(k!==P){const ic=k.item||(k.showT>0?k.showIcon:null);if(ic){if(!m.icon){m.icon=new THREE.Sprite(new THREE.SpriteMaterial({depthWrite:false}));m.icon.scale.set(1.3,1.3,1);m.icon.position.y=3.6;m.add(m.icon);}m.icon.material.map=iconTex(ic);m.icon.visible=true;m.icon.position.y=3.6+Math.sin(tt*4)*0.15;}else if(m.icon)m.icon.visible=false;}if(m.label)m.label.visible=k!==V&&Math.abs(k.dist-V.dist)>900&&Math.abs(k.dist-V.dist)<12000;
   m.children[0].position.y=Math.abs(k.speed)>100?Math.sin(tt*25+k.dist)*0.03:0;
   for(const w of m.wheels)w.rotation.x+=k.speed*U*dt/0.4;}
  // coins

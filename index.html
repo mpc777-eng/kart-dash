@@ -81,7 +81,7 @@ cv.addEventListener('pointerdown',e=>{e.preventDefault();unlock();const p=toLoca
 cv.addEventListener('pointermove',e=>{if(ptr.has(e.pointerId))ptr.set(e.pointerId,toLocal(e));});
 ['pointerup','pointercancel','pointerleave'].forEach(n=>cv.addEventListener(n,e=>ptr.delete(e.pointerId)));
 const keys={};addEventListener('keydown',e=>{keys[e.key]=1;if(e.key===' '&&state==='race')useItem();});addEventListener('keyup',e=>keys[e.key]=0);
-const RB={l:{x:20,y:560,w:170,h:180},r:{x:205,y:560,w:170,h:180},br:{x:834,y:600,w:170,h:140},item:{x:860,y:430,w:130,h:130}};
+const RB={l:{x:20,y:560,w:170,h:180},r:{x:205,y:560,w:170,h:180},up:{x:844,y:400,w:160,h:160},dn:{x:844,y:578,w:160,h:162},item:{x:680,y:610,w:140,h:130}};
 const hit=(p,b)=>p[0]>b.x&&p[0]<b.x+b.w&&p[1]>b.y&&p[1]<b.y+b.h;
 const held=b=>{for(const p of ptr.values())if(hit(p,b))return true;return false;};
 const ITEMS=['zoom','nana','bubble','magnet','rocket'],ICON={zoom:'🚀',nana:'🍌',bubble:'🫧',magnet:'🧲',rocket:'🎯'},INAME={zoom:'Speed Boost',nana:'Banana',bubble:'Bubble Shield',magnet:'Coin Magnet',rocket:'Mini Rocket'};
@@ -101,16 +101,17 @@ function update(dt){
  if(state!=='race'&&state!=='finish'&&state!=='spectate'){if(engG)engG.gain.value=0;return;}
  const racing=state==='race'||state==='finish';
  // player
- const ps=seg(P.dist),pct=P.speed/P.max;
+ const ps=seg(P.dist),pct=Math.abs(P.speed)/P.max;
  let st=0;if(!P.done){if(held(RB.l)||keys.ArrowLeft)st-=1;if(held(RB.r)||keys.ArrowRight)st+=1;}
  P.steer=lerp(P.steer,st,dt*8);
- const braking=!P.done&&(held(RB.br)||keys.ArrowDown);
+ const gas=P.done||held(RB.up)||keys.ArrowUp,braking=!P.done&&!gas&&(held(RB.dn)||keys.ArrowDown);
  let mx=P.max*(P.boost>0?1.45:1);if(Math.abs(P.x)>1.05&&P.boost<=0)mx*=0.55;
  if(P.done)mx=P.max*0.5;
  if(P.spin>0){P.spin-=dt;P.speed*=Math.pow(0.4,dt);}
- else if(braking)P.speed-=P.max*1.5*dt;
- else P.speed+=(P.speed<mx?P.max*0.45*P.acc:-P.max*0.8)*dt;
- P.speed=clamp(P.speed,0,P.max*1.5);
+ else if(braking)P.speed-=(P.speed>0?P.max*1.5:P.max*0.15)*dt;
+ else if(gas)P.speed+=(P.speed<0?P.max*1.5:P.speed<mx?P.max*0.45*P.acc:-P.max*0.8)*dt;
+ else P.speed-=Math.sign(P.speed)*Math.min(Math.abs(P.speed),P.max*0.35*dt);
+ P.speed=clamp(P.speed,-P.max*0.22,P.max*1.5);
  if(P.boost>0)P.boost-=dt;if(P.magnet>0)P.magnet-=dt;if(P.shield>0)P.shield-=dt;
  if(P.spin<=0)P.x+=P.steer*dt*2.2*Math.min(1,pct+0.3)*P.hand;
  P.x-=dt*2*pct*pct*ps.curve*0.18;P.x=clamp(P.x,-2.3,2.3);
@@ -240,7 +241,7 @@ function cockpit(b){const bf=bodyFill(P.color,W/2-300,H-200,600);
  g.fillStyle="#1d1d1d";rr(W/2-330,H-120+b,90,130,20,"#1d1d1d");rr(W/2+240,H-120+b,90,130,20,"#1d1d1d");
  g.fillStyle=bf;g.beginPath();g.moveTo(W/2-300,H);g.lineTo(W/2-230,H-150+b);g.quadraticCurveTo(W/2,H-185+b,W/2+230,H-150+b);g.lineTo(W/2+300,H);g.fill();
  g.fillStyle="rgba(255,255,255,0.25)";g.beginPath();g.ellipse(W/2,H-150+b,170,14,0,0,7);g.fill();
- rr(W/2-60,H-140+b,120,40,10,"#222");txt(Math.round(P.speed/90)+" mph",W/2,H-120+b,22,"#7f7");
+ rr(W/2-60,H-140+b,120,40,10,"#222");txt((P.speed<0?"R ":"")+Math.round(Math.abs(P.speed)/90)+" mph",W/2,H-120+b,22,"#7f7");
  // wheel
  g.save();g.translate(W/2,H-70+b);g.rotate(P.steer*0.9+(P.spin>0?Math.sin(P.spin*20):0));
  g.strokeStyle="#222";g.lineWidth=26;g.beginPath();g.arc(0,0,120,Math.PI*1.05,Math.PI*1.95);g.stroke();
@@ -267,7 +268,7 @@ function hud(){
  button(420,16,90,56,"⌂",()=>{state='tracks';},"rgba(0,0,0,0.4)",34);button(520,16,110,56,"📷",()=>{S.fp=S.fp?0:1;save();flash(S.fp?"Driver view":"Behind view");},"rgba(0,0,0,0.4)",30);
  // controls
  const C=(b,l,on,c)=>{rr(b.x,b.y,b.w,b.h,30,on?"rgba(255,255,255,0.55)":"rgba(255,255,255,0.28)");g.strokeStyle="#fff";g.lineWidth=4;g.stroke();txt(l,b.x+b.w/2,b.y+b.h/2,c||70);};
- C(RB.l,"◀",held(RB.l)||keys.ArrowLeft);C(RB.r,"▶",held(RB.r)||keys.ArrowRight);C(RB.br,"BRAKE",held(RB.br),34);
+ C(RB.l,"◀",held(RB.l)||keys.ArrowLeft);C(RB.r,"▶",held(RB.r)||keys.ArrowRight);C(RB.up,"👆",held(RB.up)||keys.ArrowUp,64);txt("GAS",RB.up.x+RB.up.w/2,RB.up.y+138,22);C(RB.dn,"👇",held(RB.dn)||keys.ArrowDown,64);txt(P.speed<0?"BACK":"BRAKE",RB.dn.x+RB.dn.w/2,RB.dn.y+140,22);if(state==='race'&&Math.abs(P.speed)<50&&!held(RB.up)&&!keys.ArrowUp)txt("Hold 👆 to go!",W/2,330,44,"#ffea00");
  rr(RB.item.x-20,RB.item.y-60,RB.item.w+20,50,16,"rgba(0,0,0,0.45)");txt(P.item?INAME[P.item]:"No item",RB.item.x+RB.item.w/2-10,RB.item.y-35,20,"#fff");
  rr(RB.item.x,RB.item.y,RB.item.w,RB.item.h,30,P.item?"rgba(255,200,0,0.85)":"rgba(255,255,255,0.2)");g.strokeStyle="#fff";g.lineWidth=4;g.stroke();
  if(P.item){txt(ICON[P.item],RB.item.x+65,RB.item.y+50,56,"#fff","center",false);txt("USE",RB.item.x+65,RB.item.y+108,30);}else txt("?",RB.item.x+65,RB.item.y+65,60,"rgba(255,255,255,0.6)");
